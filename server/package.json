@@ -1,0 +1,33 @@
+{
+  "name": "uno-server",
+  "version": "1.0.0",
+  "main": "dist/server.js",
+  "scripts": {
+    "client": "cd ../client && npm run dev",
+    "server": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "concurrently": "^9.1.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "mongoose": "^8.13.2",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.1",
+    "@types/node": "^22.14.1",
+    "@types/socket.io": "^3.0.1",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}
