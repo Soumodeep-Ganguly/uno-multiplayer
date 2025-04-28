@@ -6,6 +6,7 @@ import { ColorSelector } from "@/components/color-selector";
 import { toast } from "sonner";
 import socket from "@/lib/socket";
 import { Card, CardColor, GameState, Player } from "@/types/game";
+import SoundTrack from "@/assets/sound_track.mp3";
 
 interface GameViewProps {
   onNavigate: (view: "home" | "create-room" | "join-room" | "game") => void;
@@ -19,6 +20,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
   const [showColorSelector, setShowColorSelector] = useState(false);
   const [pendingWildCard, setPendingWildCard] = useState<Card | null>(null);
   const [hasCalledUno, setHasCalledUno] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
 
   useEffect(() => {
     // Join the game room
@@ -142,6 +144,8 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
     setHasCalledUno(true);
   };
 
+  const muteContol = () => setIsMuted((prev) => !prev);
+
   if (!gameState) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-500 via-purple-500 to-pink-500">
@@ -156,6 +160,8 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-500 via-purple-500 to-pink-500">
+      <audio src={SoundTrack} autoPlay loop hidden muted={isMuted} />
+
       {/* Top section - other players */}
       <div className="flex justify-center p-4 gap-4 flex-wrap">
         {gameState.players
@@ -228,6 +234,8 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
             isPlayerTurn={isCurrentPlayer}
             onExitGame={() => onNavigate("home")}
             onDrawCard={isCurrentPlayer ? drawCard : undefined}
+            muteContol={muteContol}
+            isMuted={isMuted}
           />
         </div>
       </div>
