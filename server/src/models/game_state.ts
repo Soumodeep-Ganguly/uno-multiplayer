@@ -1,5 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
-import { GameState, Card, Player } from '../game/gameLogic';
+import { Card, GameState, Player } from '../types/gameType';
 
 export interface GameStateDocument extends GameState, Document {}
 
@@ -18,7 +18,7 @@ const PlayerSchema = new Schema<Player>({
 
 const GameStateSchema = new Schema<GameStateDocument>({
   roomId: { type: String, required: true },
-  players: { type: [String], required: true },
+  players: { type: [PlayerSchema], required: true },
   currentPlayerIndex: { type: Number, required: true },
   currentPlayer: { type: String, required: true },
   direction: { type: Number, required: true },
@@ -27,6 +27,6 @@ const GameStateSchema = new Schema<GameStateDocument>({
   winner: { type: String, default: null },
   started: { type: Boolean, default: false },
   currentColor: { type: String, default: "red" }
-});
+}, { timestamps: true });
 
 export const GameStateModel = mongoose.model<GameStateDocument>('GameState', GameStateSchema);

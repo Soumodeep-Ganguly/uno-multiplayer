@@ -1,92 +1,39 @@
-import { GameStateModel } from "../models/game_state";
+import { Card, Color, GameState } from "../types/gameType";
+import { deleteGameRoom, getGameState, setGameState } from "../utils/game";
 
-export type Color = "red" | "green" | "blue" | "yellow" | "wild";
-export type CardType = "number" | "skip" | "reverse" | "+2" | "wild" | "+4";
-
-export interface Card {
-  color: Color;
-  type: CardType;
-  value?: number | string;
-}
-
-export interface Player {
-  id: string;
-  name: string;
-  hand: Card[];
-  calledUno: boolean;
-}
-
-export interface GameState {
-  roomId: string;
-  players: Player[];
-  currentPlayerIndex: number;
-  currentPlayer: string;
-  direction: number;
-  deck: Card[];
-  discardPile: Card[];
-  currentColor: Color;
-  drawStack: number;
-  maxPlayers: number;
-  winner?: Player;
-  started: boolean;
-}
-
-const rooms: { [key: string]: GameState } = {};
-const saveTimers: { [key: string]: NodeJS.Timeout } = {};
-
-export async function getGameState(roomId: string): Promise<GameState | undefined> {
-  if (rooms[roomId]) return rooms[roomId];
-
-  const dbGame = await GameStateModel.findOne({ roomId }).lean<GameState>();
-  if (dbGame) {
-    rooms[roomId] = dbGame;
-    return dbGame;
-  }
-  return undefined;
-}
-
-export async function setGameState(roomId: string, gameState: GameState): Promise<void> {
-  rooms[roomId] = gameState;
-
-  if (saveTimers[roomId]) clearTimeout(saveTimers[roomId]); // Clear old timer if running
-
-  saveTimers[roomId] = setTimeout(async () => {
-    await GameStateModel.findOneAndUpdate({ roomId }, gameState, { upsert: true, new: true });
-    delete saveTimers[roomId]; // Clean up after save
-  }, 5000); // Save after 5 seconds of no activity
-}
-
-export async function deleteGameRoom(roomId: string): Promise<void> {
-  delete rooms[roomId];
-  clearTimeout(saveTimers[roomId]);
-  await GameStateModel.deleteOne({ roomId });
-}
-
+// Create and shuffle a clean deck
 export const createDeck = (): Card[] => {
   const colors: Color[] = ["red", "green", "blue", "yellow"];
   const deck: Card[] = [];
 
   colors.forEach((color) => {
     for (let i = 0; i <= 9; i++) {
-      deck.push({ color, type: "number", value: i });
-      deck.push({ color, type: "number", value: i });
+      deck.push(
+        { color, type: "number", value: i },
+        { color, type: "number", value: i }
+      );
     }
-    deck.push({ color, type: "skip", value: "skip" });
-    deck.push({ color, type: "skip", value: "skip" });
-    deck.push({ color, type: "reverse", value: "reverse" });
-    deck.push({ color, type: "reverse", value: "reverse" });
-    deck.push({ color, type: "+2", value: "+2" });
-    deck.push({ color, type: "+2", value: "+2" });
+    deck.push(
+      { color, type: "skip", value: "skip" },
+      { color, type: "skip", value: "skip" },
+      { color, type: "reverse", value: "reverse" },
+      { color, type: "reverse", value: "reverse" },
+      { color, type: "+2", value: "+2" },
+      { color, type: "+2", value: "+2" }
+    );
   });
 
   for (let i = 0; i < 4; i++) {
-    deck.push({ color: "wild", type: "wild", value: "wild" });
-    deck.push({ color: "wild", type: "+4", value: "+4" });
+    deck.push(
+      { color: "wild", type: "wild", value: "wild" },
+      { color: "wild", type: "+4", value: "+4" }
+    );
   }
 
   return shuffleDeck(deck);
 };
 
+// Using Fisher-Yates Shuffle
 export const shuffleDeck = (deck: Card[]): Card[] => {
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -98,14 +45,13 @@ export const shuffleDeck = (deck: Card[]): Card[] => {
 export const drawCards = (game: GameState, count = 1): Card[] => {
   const cards: Card[] = [];
   for (let i = 0; i < count; i++) {
+    // Put discarded pile into deck if deck is empty
     if (game.deck.length === 0) {
       const topCard = game.discardPile.pop(); 
       game.deck = shuffleDeck(game.discardPile.splice(0));
       if (topCard) game.discardPile.push(topCard);
     }
-    if (game.deck.length) {
-      cards.push(game.deck.pop()!);
-    }
+    if (game.deck.length) cards.push(game.deck.pop()!);
   }
   return cards;
 };
@@ -116,9 +62,10 @@ export const advanceTurn = (game: GameState) => {
   game.currentPlayer = game.players[game.currentPlayerIndex].id;
 };
 
-export const joinGameRoom = (roomId: string, player: { id: string; name: string }, maxPlayers?: number) => {
-  if (!rooms[roomId]) {
-    rooms[roomId] = {
+export const joinGameRoom = async (roomId: string, player: { id: string; name: string }, maxPlayers?: number) => {
+  let room = await getGameState(roomId)
+  if (!room) {
+    room = {
       roomId,
       players: [],
       currentPlayerIndex: 0,
@@ -130,27 +77,28 @@ export const joinGameRoom = (roomId: string, player: { id: string; name: string 
       currentColor: "red",
       drawStack: 0,
       started: false
-    };
+    }
+    await setGameState(roomId, room)
   }
 
   // Check if player already exists
-  const existingPlayer = rooms[roomId].players.find(p => p.id === player.id);
-  if (existingPlayer) {
-    return { players: rooms[roomId].players, started: rooms[roomId].started };
-  }
+  const existingPlayer = room.players.find(p => p.id === player.id);
+  if (existingPlayer) return { ...room, started: room.started || room.players.length === room.maxPlayers };
 
-  rooms[roomId].players.push({
+  room.players.push({
     id: player.id,
     name: player.name,
     hand: [],
     calledUno: false,
   });
 
-  return { ...rooms[roomId], started: rooms[roomId].started || rooms[roomId].players.length === rooms[roomId].maxPlayers };
+  if(!maxPlayers) setGameState(roomId, room)
+
+  return { ...room, started: room.started || room.players.length === room.maxPlayers };
 };
 
-export const createGame = (roomId: string) => {
-  const game = rooms[roomId];
+export const createGame = async (roomId: string) => {
+  const game = await getGameState(roomId)
   if (!game) throw new Error("Room not found");
   if (game.players.length < 2) throw new Error("Need at least 2 players to start");
   if (game.deck.length > 0) return game
@@ -172,7 +120,7 @@ export const createGame = (roomId: string) => {
   }
   const discardPile = [firstCard];
 
-  rooms[roomId] = {
+  const newGame = {
     ...game,
     players,
     currentPlayerIndex: 0,
@@ -184,11 +132,13 @@ export const createGame = (roomId: string) => {
     started: true
   };
 
-  return rooms[roomId];
+  setGameState(roomId, newGame)
+
+  return newGame;
 };
 
-export const playCard = (roomId: string, playerId: string, card: Card, color?: Color) => {
-  const game = rooms[roomId];
+export const playCard = async (roomId: string, playerId: string, card: Card, color?: Color) => {
+  const game = await getGameState(roomId);
   if (!game) return null;
   if (!game.started) return null;
 
@@ -204,10 +154,7 @@ export const playCard = (roomId: string, playerId: string, card: Card, color?: C
 
   // Validate move
   const topCard = game.discardPile[game.discardPile.length - 1];
-  const isPlayable = !!topCard &&
-      (card.color === "wild" ||
-        card.color === game.currentColor ||
-        card.value === topCard.value);
+  const isPlayable = !!topCard && (card.color === "wild" || card.color === game.currentColor || card.value === topCard.value);
 
   // Add logic for +2 and +4 cards
   if (card.type === "+2" || card.type === "+4") {
@@ -225,11 +172,8 @@ export const playCard = (roomId: string, playerId: string, card: Card, color?: C
   game.discardPile.push(playedCard);
 
   // Handle wild card color choice
-  if (playedCard.color === "wild" && color) {
-    game.currentColor = color;
-  } else {
-    game.currentColor = playedCard.color;
-  }
+  if (playedCard.color === "wild" && color) game.currentColor = color;
+  else game.currentColor = playedCard.color;
 
   switch (playedCard.type) {
     case "skip":
@@ -255,14 +199,15 @@ export const playCard = (roomId: string, playerId: string, card: Card, color?: C
   // Check for win
   if (player.hand.length === 0) game.winner = player;
 
-  player.calledUno = false; // Reset after turn
+  player.calledUno = false; // Reset uno call after turn
   advanceTurn(game);
+  setGameState(roomId, game)
 
   return game;
 };
 
-export const drawCard = (roomId: string, playerId: string) => {
-  const game = rooms[roomId];
+export const drawCard = async (roomId: string, playerId: string) => {
+  const game = await getGameState(roomId);
   if (!game) return null;
   if (!game.started) return null;
 
@@ -285,7 +230,7 @@ export const drawCard = (roomId: string, playerId: string) => {
   );
 
   if (game.drawStack > 0) {
-    // If drawing because of drawStack (+2/+4), we *always* advance turn
+    // If drawing because of drawStack (+2/+4), we always advance turn
     advanceTurn(game);
     game.drawStack = 0;
   } else if (!hasPlayableCard) {
@@ -293,11 +238,12 @@ export const drawCard = (roomId: string, playerId: string) => {
     advanceTurn(game);
   }
 
+  setGameState(roomId, game)
   return game;
 };
 
-export const callUno = (roomId: string, playerId: string) => {
-  const game = rooms[roomId];
+export const callUno = async (roomId: string, playerId: string) => {
+  const game = await getGameState(roomId);
   if (!game) return null;
   if (!game.started) return null;
 
@@ -305,11 +251,12 @@ export const callUno = (roomId: string, playerId: string) => {
   if (!player) return null;
 
   player.calledUno = true;
+  setGameState(roomId, game)
   return game;
 };
 
-export const removePlayer = (roomId: string, playerId: string) => {
-  const game = rooms[roomId];
+export const removePlayer = async (roomId: string, playerId: string) => {
+  const game = await getGameState(roomId)
   if (!game) return;
 
   const playerIndex = game.players.findIndex((p) => p.id === playerId);
@@ -320,16 +267,13 @@ export const removePlayer = (roomId: string, playerId: string) => {
   game.players.splice(playerIndex, 1);
 
   if (game.players.length === 0) {
-    delete rooms[roomId];
+    await deleteGameRoom(roomId);
     return;
   }
 
   // Adjust current player index if needed
-  if (wasCurrentPlayer) {
-    game.currentPlayerIndex = (game.currentPlayerIndex + game.players.length) % game.players.length;
-  } else if (game.currentPlayerIndex > playerIndex) {
-    game.currentPlayerIndex--;
-  }
+  if (wasCurrentPlayer)  game.currentPlayerIndex = (game.currentPlayerIndex + game.players.length) % game.players.length;
+  else if (game.currentPlayerIndex > playerIndex) game.currentPlayerIndex--;
 
   game.currentPlayer = game.players[game.currentPlayerIndex].id;
 
@@ -338,4 +282,5 @@ export const removePlayer = (roomId: string, playerId: string) => {
     game.started = false;
     game.winner = game.players[0];
   }
+  await setGameState(roomId, game)
 };

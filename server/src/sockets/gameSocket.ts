@@ -1,6 +1,6 @@
 import { Server, Socket } from "socket.io";
-import { GameState, createGame, playCard, drawCard, joinGameRoom, callUno, removePlayer, getGameState } from "../game/gameLogic";
-import { getOrCreateRoom } from "../models/room";
+import { createGame, playCard, drawCard, joinGameRoom, callUno, removePlayer } from "../game/gameLogic";
+import { getGameState } from "../utils/game";
 
 export const registerGameHandlers = (io: Server, socket: Socket) => {
   console.log(`Player connected: ${socket.id}`);
@@ -12,14 +12,14 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
         return;
       }
 
-      const room = await getOrCreateRoom(roomId);
-      if (!room) {
-        socket.emit("error-joining", { message: "Failed to create room" });
+      const room = await getGameState(roomId);
+      if (!room && !maxPlayers) {
+        socket.emit("error-joining", { message: "Invalid Room ID" });
         return;
       }
 
       socket.join(roomId);
-      const gameState = joinGameRoom(roomId, { id: socket.id, name: playerName }, maxPlayers);
+      const gameState = await joinGameRoom(roomId, { id: socket.id, name: playerName }, maxPlayers);
 
       // Send room state to all players in the room
       io.to(roomId).emit("room-state", gameState);
@@ -28,7 +28,7 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
       io.to(roomId).emit("player-joined", gameState);
 
       if (gameState.started) {
-        const newGameState = createGame(roomId);
+        const newGameState = await createGame(roomId);
         io.to(roomId).emit("game-started", newGameState);
       }
     } catch (error) {
@@ -44,11 +44,9 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
     }
   });
 
-  socket.on("start-game", ({ roomId }) => {
+  socket.on("start-game", async ({ roomId }) => {
     try {
-      const gameState = createGame(roomId);
-      // console.log("GAME STATE START GAME", gameState)
-      // io.to(roomId).emit("room-state", gameState)
+      const gameState = await createGame(roomId);
       io.to(roomId).emit("game-started", gameState);
       io.to(roomId).emit("game-updated", gameState);
     } catch (error) {
@@ -57,53 +55,37 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
     }
   });
 
-  socket.on("play-card", ({ roomId, card, color }) => {
-    const gameState = playCard(roomId, socket.id, card, color);
+  socket.on("play-card", async ({ roomId, card, color }) => {
+    const gameState = await playCard(roomId, socket.id, card, color);
     if (gameState) {
-      // console.log("GAME STATE PLAY CARD", gameState)
       io.to(roomId).emit("game-updated", gameState);
-
-      if (gameState.winner) {
-        // console.log("PLAY CARD WINNER")
-        io.to(roomId).emit("game-over", { winner: gameState.winner });
-      }
+      if (gameState.winner) io.to(roomId).emit("game-over", { winner: gameState.winner });
     } else {
       socket.emit("invalid-move", { message: "Invalid card played." });
     }
   });
 
-  socket.on("draw-card", ({ roomId }) => {
-    const gameState = drawCard(roomId, socket.id);
-    // console.log("GAME STATE DRAW CARD", gameState)
-    if (gameState) {
-      io.to(roomId).emit("game-updated", gameState);
-    }
+  socket.on("draw-card", async ({ roomId }) => {
+    const gameState = await drawCard(roomId, socket.id);
+    if (gameState) io.to(roomId).emit("game-updated", gameState);
   });
 
-  socket.on("penalty-draw", ({ roomId }) => {
-    const gameState = drawCard(roomId, socket.id);
-    // console.log("GAME STATE PENALTY DRAW", gameState)
-    if (gameState) {
-      io.to(roomId).emit("game-updated", gameState);
-    }
+  socket.on("penalty-draw", async ({ roomId }) => {
+    const gameState = await drawCard(roomId, socket.id);
+    if (gameState) io.to(roomId).emit("game-updated", gameState);
   });
 
-  socket.on("call-uno", ({ roomId }) => {
-    const gameState = callUno(roomId, socket.id);
-    // console.log("GAME STATE CALL UNO", gameState)
-    if (gameState) {
-      io.to(roomId).emit("game-updated", gameState);
-    }
+  socket.on("call-uno", async ({ roomId }) => {
+    const gameState = await callUno(roomId, socket.id);
+    if (gameState) io.to(roomId).emit("game-updated", gameState);
   });
 
   socket.on("disconnecting", () => {
-    socket.rooms.forEach((roomId) => {
-      removePlayer(roomId, socket.id);
+    socket.rooms.forEach(async (roomId) => {
+      await removePlayer(roomId, socket.id);
       socket.to(roomId).emit("player-left", socket.id);
-      const gameState = getGameState(roomId);
-      if (gameState) {
-        io.to(roomId).emit("game-updated", gameState);
-      }
+      const gameState = await getGameState(roomId);
+      if (gameState) io.to(roomId).emit("game-updated", gameState);
     });
   });
 
