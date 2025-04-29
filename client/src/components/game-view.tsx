@@ -21,6 +21,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
   const [pendingWildCard, setPendingWildCard] = useState<Card | null>(null);
   const [hasCalledUno, setHasCalledUno] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [winnerSelected, setWinnerSelected] = useState(false);
 
   useEffect(() => {
     // Join the game room
@@ -61,6 +62,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
       toast.success(
         `${winner.id === socket.id ? "You" : winner.name} won the game!`
       );
+      setWinnerSelected(true);
       setTimeout(() => {
         onNavigate("home");
       }, 6000);
@@ -200,7 +202,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
           </span>
         </div>
 
-        <div className="flex items-center justify-center gap-8 mb-8">
+        <div className="flex items-center justify-center gap-8 mb-4">
           {/* Draw pile */}
           <div
             className="h-32 w-20 bg-gray-700 rounded-xl border-2 border-white shadow-lg cursor-pointer hover:scale-105 transition-transform"
@@ -218,6 +220,17 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
             </div>
           )}
         </div>
+
+        {!winnerSelected && (
+          <div className="mb-4 text-white text-xl font-bold">
+            {gameState.players[gameState.currentPlayerIndex]?.id === socket.id
+              ? "Your"
+              : `${
+                  gameState.players[gameState.currentPlayerIndex]?.name
+                }'s`}{" "}
+            turn
+          </div>
+        )}
 
         {/* Color selector for wild cards */}
         {showColorSelector && (

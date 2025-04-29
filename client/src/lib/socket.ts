@@ -1,8 +1,8 @@
 import { io } from "socket.io-client";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+// const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
-const socket = io(SOCKET_URL, {
+const socket = io("https://universal-backend-x2t5.onrender.com/uno", {
   autoConnect: true,
   reconnection: true,
   reconnectionAttempts: 5,
