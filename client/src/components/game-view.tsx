@@ -186,7 +186,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-500 via-purple-500 to-pink-500">
       <audio src={SoundTrack} autoPlay loop hidden muted={isMuted} />
 
-      {gameState?.players[0].id !== socket.id && winnerSelected && (
+      {gameState?.players[0].id === socket.id && winnerSelected && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <AskReplay playAgain={replay} destroyRoom={destroyRoom} />
         </div>
