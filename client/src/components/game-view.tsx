@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import socket from "@/lib/socket";
 import { Card, CardColor, GameState, Player } from "@/types/game";
 import SoundTrack from "@/assets/sound_track.mp3";
+import { AskReplay } from "./ask-replay";
 
 interface GameViewProps {
   onNavigate: (view: "home" | "create-room" | "join-room" | "game") => void;
@@ -36,6 +37,12 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
       setGameState(state);
       const me = state.players.find((p) => p.id === socket.id);
       if (me) setHasCalledUno(me.calledUno);
+
+      if (!state || !state?.players || state?.players?.length === 0) {
+        setTimeout(() => {
+          onNavigate("home");
+        }, 1000);
+      }
     });
 
     socket.on("player-joined", (state: GameState) => {
@@ -48,9 +55,12 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
     });
 
     socket.on("player-left", (playerId: string) => {
-      const player = gameState?.players.find((p) => p.id === playerId);
-      if (player) {
-        toast.info(`${player.name} left the game`);
+      if (playerId === socket.id) onNavigate("home");
+      else {
+        const player = gameState?.players.find((p) => p.id === playerId);
+        if (player) {
+          toast.info(`${player.name} left the game`);
+        }
       }
     });
 
@@ -63,9 +73,6 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
         `${winner.id === socket.id ? "You" : winner.name} won the game!`
       );
       setWinnerSelected(true);
-      setTimeout(() => {
-        onNavigate("home");
-      }, 6000);
     });
 
     return () => {
@@ -76,7 +83,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
       socket.off("invalid-move");
       socket.off("game-over");
     };
-  }, [roomId, playerName, onNavigate]);
+  }, [roomId, playerName]);
 
   useEffect(() => {
     if (gameState) {
@@ -148,6 +155,21 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
 
   const muteContol = () => setIsMuted((prev) => !prev);
 
+  const replay = () => {
+    socket.emit("play-again", { roomId });
+    setTimeout(() => {
+      setWinnerSelected(false);
+      setHasCalledUno(false);
+    }, 1000);
+  };
+
+  const destroyRoom = () => {
+    socket.emit("destroy-room", { roomId });
+    setTimeout(() => {
+      onNavigate("home");
+    }, 3000);
+  };
+
   if (!gameState) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-500 via-purple-500 to-pink-500">
@@ -163,6 +185,12 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-500 via-purple-500 to-pink-500">
       <audio src={SoundTrack} autoPlay loop hidden muted={isMuted} />
+
+      {gameState?.players[0].id !== socket.id && winnerSelected && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <AskReplay playAgain={replay} destroyRoom={destroyRoom} />
+        </div>
+      )}
 
       {/* Top section - other players */}
       <div className="flex justify-center p-4 gap-4 flex-wrap">
