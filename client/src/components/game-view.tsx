@@ -23,6 +23,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
   const [hasCalledUno, setHasCalledUno] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [winnerSelected, setWinnerSelected] = useState(false);
+  const [exitGame, setExitGame] = useState(false);
 
   useEffect(() => {
     // Join the game room
@@ -37,6 +38,8 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
       setGameState(state);
       const me = state.players.find((p) => p.id === socket.id);
       if (me) setHasCalledUno(me.calledUno);
+
+      if (!state.winner) setWinnerSelected(false);
 
       if (!state || !state?.players || state?.players?.length === 0) {
         setTimeout(() => {
@@ -133,7 +136,11 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
 
         const playerHand =
           gameState.players.find((p) => p.id === socket.id)?.hand || [];
-        if (playerHand.length === 2 && !hasCalledUno) {
+        if (
+          playerHand.length === 2 &&
+          !hasCalledUno &&
+          gameState.drawStack === 0
+        ) {
           toast.error("Forgot to call UNO!", {
             description: "You'll draw 2 cards as penalty",
           });
@@ -188,7 +195,28 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
 
       {gameState?.players[0].id === socket.id && winnerSelected && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <AskReplay playAgain={replay} destroyRoom={destroyRoom} />
+          <AskReplay
+            confirmAction={replay}
+            declineAction={destroyRoom}
+            title="Do you want to re-play?"
+            confirmText="Play Again"
+            declineText="Destroy Room"
+          />
+        </div>
+      )}
+
+      {exitGame && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <AskReplay
+            confirmAction={() => {
+              socket.emit("leave-room", { roomId });
+              onNavigate("home");
+            }}
+            declineAction={() => setExitGame(false)}
+            title="Exit this game?"
+            confirmText="Yes"
+            declineText="No"
+          />
         </div>
       )}
 
@@ -263,7 +291,13 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
         {/* Color selector for wild cards */}
         {showColorSelector && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <ColorSelector onSelectColor={handleColorSelection} />
+            <ColorSelector
+              onSelectColor={handleColorSelection}
+              onClose={() => {
+                setPendingWildCard(null);
+                setShowColorSelector(false);
+              }}
+            />
           </div>
         )}
 
@@ -273,7 +307,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
             onCallUno={callUno}
             canCallUno={myHand.length === 2 && !hasCalledUno}
             isPlayerTurn={isCurrentPlayer}
-            onExitGame={() => onNavigate("home")}
+            onExitGame={() => setExitGame(true)}
             onDrawCard={isCurrentPlayer ? drawCard : undefined}
             muteContol={muteContol}
             isMuted={isMuted}

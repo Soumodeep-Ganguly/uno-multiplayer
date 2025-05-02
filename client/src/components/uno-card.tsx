@@ -46,7 +46,7 @@ export function UnoCard({
       className={`relative h-32 w-20 rounded-xl ${bgColor} ${textColor} flex flex-col items-center justify-center border-2 border-white shadow-lg overflow-hidden transition-all duration-200 ${
         isPlayable && !disabled
           ? "cursor-pointer scale-110 hover:scale-110 hover:shadow-xl"
-          : ""
+          : "cursor-default"
       } ${disabled ? "opacity-50" : ""} ${className ?? ""}`}
       onClick={isPlayable && !disabled ? onClick : undefined}
     >

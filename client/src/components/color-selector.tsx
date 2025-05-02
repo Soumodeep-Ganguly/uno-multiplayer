@@ -1,14 +1,23 @@
 import { Card } from "@/components/ui/card";
+import { X } from "lucide-react";
 
 type CardColor = "red" | "blue" | "green" | "yellow";
 
 interface ColorSelectorProps {
   onSelectColor: (color: CardColor) => void;
+  onClose: () => void;
 }
 
-export function ColorSelector({ onSelectColor }: ColorSelectorProps) {
+export function ColorSelector({ onSelectColor, onClose }: ColorSelectorProps) {
   return (
     <Card className="p-4 bg-black/20 backdrop-blur-sm">
+      {onClose && (
+        <X
+          className="absolute top-4 right-3 cursor-pointer text-white hover:text-red-400 transition"
+          onClick={onClose}
+        />
+      )}
+
       <div className="text-white text-center mb-4 font-bold">
         Choose a color
       </div>

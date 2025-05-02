@@ -8,6 +8,7 @@ import { UnoLogo } from "@/components/uno-logo";
 import { toast } from "sonner";
 import socket from "@/lib/socket";
 import { GameState } from "@/types/game";
+import { PlayerList } from "./player-list";
 
 interface JoinRoomViewProps {
   onNavigate: (view: "home" | "create-room" | "join-room" | "game") => void;
@@ -25,9 +26,11 @@ export function JoinRoomView({
   setRoomId,
 }: JoinRoomViewProps) {
   const [isJoining, setIsJoining] = useState(false);
+  const [gameState, setGameState] = useState<GameState | null>(null);
 
   useEffect(() => {
     socket.on("room-state", (state: GameState) => {
+      setGameState(state);
       if (state.started) {
         onNavigate("game");
       }
@@ -95,6 +98,18 @@ export function JoinRoomView({
               />
             </div>
 
+            {gameState && (
+              <div className="space-y-2">
+                <Label>
+                  Players ({gameState.players.length}/{gameState.maxPlayers})
+                </Label>
+                <PlayerList
+                  players={gameState.players.map((p) => p.name)}
+                  host={gameState.players[0]?.name}
+                />
+              </div>
+            )}
+
             <div className="flex justify-between pt-4">
               <Button
                 variant="outline"
@@ -110,7 +125,11 @@ export function JoinRoomView({
                 disabled={isJoining || !playerName.trim() || !roomId}
                 className="transform hover:scale-105"
               >
-                {isJoining ? "Joining..." : "Join Game"}
+                {isJoining
+                  ? gameState
+                    ? "Joined Game"
+                    : "Joining..."
+                  : "Join Game"}
               </Button>
             </div>
           </CardContent>

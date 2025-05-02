@@ -36,6 +36,8 @@ export interface GameState {
   currentColor: CardColor;
   currentPlayerIndex: number;
   started: boolean;
+  maxPlayers: number;
+  drawStack: number;
   discardPile: Card[]
   winner?: Player;
 }
