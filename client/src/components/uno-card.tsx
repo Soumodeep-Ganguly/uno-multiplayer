@@ -65,7 +65,7 @@ export function UnoCard({
         <div
           className={`w-14 h-14 ${bgColor} rounded-full flex items-center justify-center transform -rotate-12`}
         >
-          {value === "wild" || value === "wild4" ? (
+          {value === "wild" || value === "+4" ? (
             <div className="grid grid-cols-2 gap-1">
               <div className="w-5 h-5 bg-red-500 rounded-full"></div>
               <div className="w-5 h-5 bg-blue-500 rounded-full"></div>

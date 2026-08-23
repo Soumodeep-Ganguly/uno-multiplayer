@@ -1,8 +1,9 @@
 import { io } from "socket.io-client";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:8080";
 
-const socket = io(SOCKET_URL, {
+// The backend (universal-backend) registers UNO handlers on the /uno namespace.
+const socket = io(`${SOCKET_URL}/uno`, {
   autoConnect: true,
   reconnection: true,
   reconnectionAttempts: 5,

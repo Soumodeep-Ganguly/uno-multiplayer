@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { UnoCard } from "@/components/uno-card";
 import { PlayerIndicator } from "@/components/player-indicator";
 import { GameControls } from "@/components/game-controls";
@@ -25,9 +25,27 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
   const [winnerSelected, setWinnerSelected] = useState(false);
   const [exitGame, setExitGame] = useState(false);
 
+  const joinedRef = useRef(false);
+  const firstConnectRef = useRef(true);
+
   useEffect(() => {
     // Join the game room
     socket.emit("join-room", { roomId, playerName });
+    joinedRef.current = true;
+
+    // Re-join after a disconnect/reconnect: the server removes the player on
+    // disconnect, and the new connection has a different socket.id, so it must
+    // rejoin to get back into the game.
+    const handleConnect = () => {
+      if (firstConnectRef.current) {
+        firstConnectRef.current = false;
+        return;
+      }
+      if (joinedRef.current) {
+        socket.emit("join-room", { roomId, playerName });
+      }
+    };
+    socket.on("connect", handleConnect);
 
     socket.on("game-started", (state: GameState) => {
       setGameState(state);
@@ -79,6 +97,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
     });
 
     return () => {
+      socket.off("connect", handleConnect);
       socket.off("game-started");
       socket.off("game-updated");
       socket.off("player-joined");
@@ -94,6 +113,27 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
       setIsCurrentPlayer(currentPlayer?.id === socket.id);
     }
   }, [gameState]);
+
+  const myHand = gameState?.players.find((p) => p.id === socket.id)?.hand || [];
+  const topCard = gameState?.discardPile[gameState.discardPile.length - 1];
+
+  // Mirrors the server's playability rule (universal-backend/utils/uno.js):
+  // while a draw stack (+2/+4) is pending, only a same-type +2/+4 can be
+  // stacked — everything else must be drawn, so nothing else is playable.
+  const isCardPlayable = (card: Card) => {
+    if (!topCard || !gameState) return false;
+    if (gameState.drawStack > 1) {
+      return (
+        (topCard.value === "+2" && card.value === "+2") ||
+        (topCard.value === "+4" && card.value === "+4")
+      );
+    }
+    return (
+      card.color === "wild" ||
+      card.color === gameState.currentColor ||
+      card.value === topCard.value
+    );
+  };
 
   const drawCard = () => {
     if (!isCurrentPlayer) return;
@@ -117,13 +157,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
 
     console.log("Trying to play card:", card, "Current player:", socket.id);
 
-    const isPlayable =
-      !!topCard &&
-      (card.color === "wild" ||
-        card.color === gameState.currentColor ||
-        card.value === topCard.value);
-
-    if (isPlayable) {
+    if (isCardPlayable(card)) {
       if (card.color === "wild") {
         setPendingWildCard(card);
         setShowColorSelector(true);
@@ -141,10 +175,11 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
           !hasCalledUno &&
           gameState.drawStack === 0
         ) {
+          // The server applies this penalty itself in playCard; the old
+          // penalty-draw emit was a no-op (turn had already advanced).
           toast.error("Forgot to call UNO!", {
             description: "You'll draw 2 cards as penalty",
           });
-          socket.emit("penalty-draw", { roomId });
         }
       }
     } else {
@@ -184,10 +219,6 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
       </div>
     );
   }
-
-  const myHand = gameState.players.find((p) => p.id === socket.id)?.hand || [];
-
-  const topCard = gameState.discardPile[gameState.discardPile.length - 1];
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-500 via-purple-500 to-pink-500">
@@ -288,6 +319,13 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
           </div>
         )}
 
+        {gameState.drawStack > 0 && (
+          <div className="mb-4 text-white text-lg font-bold">
+            ⚠️ Draw {gameState.drawStack} card
+            {gameState.drawStack > 1 ? "s" : ""} or stack a +2/+4
+          </div>
+        )}
+
         {/* Color selector for wild cards */}
         {showColorSelector && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -318,9 +356,9 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
       {/* Bottom section - player's hand */}
       <div className="p-4 bg-black/20 backdrop-blur-sm">
         <div className="flex justify-center items-center gap-2 flex-wrap">
-          {myHand.map((card) => (
+          {myHand.map((card, index) => (
             <div
-              key={card.id}
+              key={`${card.color}-${card.value}-${index}`}
               className={`transform transition-transform duration-200 ${
                 isCurrentPlayer ? "hover:-translate-y-4" : ""
               }`}
@@ -328,12 +366,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
               <UnoCard
                 card={card}
                 onClick={() => isCurrentPlayer && playCard(card)}
-                isPlayable={
-                  !!topCard &&
-                  (card.color === "wild" ||
-                    card.color === gameState.currentColor ||
-                    card.value === topCard.value)
-                }
+                isPlayable={isCardPlayable(card)}
                 disabled={!isCurrentPlayer}
               />
             </div>
