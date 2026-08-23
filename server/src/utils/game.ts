@@ -1,4 +1,4 @@
-import { GameStateModel } from "../models/game_state";
+import { GameStateModel } from "../db";
 import { GameState } from "../types/gameType";
 
 const rooms: { [key: string]: GameState } = {};

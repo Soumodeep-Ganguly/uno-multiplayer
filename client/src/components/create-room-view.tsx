@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +15,7 @@ import { UnoLogo } from "@/components/uno-logo";
 import { toast } from "sonner";
 import socket from "@/lib/socket";
 import { GameState } from "@/types/game";
+import { useAuth } from "@/lib/auth-context";
 
 interface CreateRoomViewProps {
   onNavigate: (view: "home" | "create-room" | "join-room" | "game") => void;
@@ -40,8 +40,16 @@ export function CreateRoomView({
   players,
   setPlayers,
 }: CreateRoomViewProps) {
+  const { user } = useAuth();
   const [roomCreated, setRoomCreated] = useState(false);
   const [canStartGame, setCanStartGame] = useState(false);
+
+  // Auto-fill player name from auth context on mount
+  useEffect(() => {
+    if (user?.gameName) {
+      setPlayerName(user.gameName);
+    }
+  }, []);
 
   // Generate a random room ID when the component mounts
   useEffect(() => {
@@ -164,28 +172,24 @@ export function CreateRoomView({
                 <div className="flex-1 p-3 bg-gray-100 rounded-md font-mono text-center text-lg font-bold">
                   {roomId}
                 </div>
-                <Button
-                  variant="outline"
-                  size="icon"
+                <button
                   onClick={copyRoomId}
-                  className="border-2 bg-gray-700 text-white hover:text-white"
+                  className="size-9 rounded-md inline-flex items-center justify-center border-2 bg-gray-700 text-white hover:bg-gray-600 transition-all"
                 >
                   <Copy className="h-4 w-4" />
-                </Button>
+                </button>
               </div>
             </div>
 
             {!roomCreated && (
               <div className="space-y-2">
-                <Button
-                  variant="default"
-                  size="lg"
-                  className="w-full text-lg bg-gray-700 text-white font-bold transition-all transform hover:scale-105"
+                <button
+                  className="w-full h-10 px-6 rounded-md inline-flex items-center justify-center text-lg font-bold bg-gray-700 text-white hover:bg-gray-600 transition-all transform hover:scale-105 disabled:opacity-50 disabled:pointer-events-none"
                   onClick={createNewRoom}
                   disabled={!playerName.trim()}
                 >
                   Create Room
-                </Button>
+                </button>
               </div>
             )}
 
@@ -199,19 +203,18 @@ export function CreateRoomView({
             )}
 
             <div className="flex justify-between pt-4">
-              <Button
-                variant="outline"
-                className="border-2 text-white hover:text-white"
+              <button
+                className="h-10 px-4 rounded-md inline-flex items-center justify-center gap-2 font-bold border-2 border-gray-300 bg-white text-gray-900 hover:bg-gray-100 transition-all"
                 onClick={() => onNavigate("home")}
               >
-                <ArrowLeft className="mr-2 h-4 w-4" />
+                <ArrowLeft className="h-4 w-4" />
                 Back
-              </Button>
+              </button>
 
               {roomCreated && (
-                <Button
+                <button
                   disabled={!canStartGame}
-                  className={`bg-green-500 hover:bg-green-600 ${
+                  className={`h-10 px-6 rounded-md inline-flex items-center justify-center font-bold bg-green-500 hover:bg-green-600 text-white transition-all ${
                     !canStartGame
                       ? "opacity-50 cursor-not-allowed"
                       : "transform hover:scale-105"
@@ -219,7 +222,7 @@ export function CreateRoomView({
                   onClick={startGame}
                 >
                   Start Game
-                </Button>
+                </button>
               )}
             </div>
           </CardContent>

@@ -1,4 +1,3 @@
-import { Button } from "@/components/ui/button";
 import { VolumeX, Volume2, Home } from "lucide-react";
 import { useEffect } from "react";
 
@@ -40,20 +39,16 @@ export function GameControls({
   return (
     <div className="flex justify-between items-center gap-4 p-4 bg-black/20 backdrop-blur-sm rounded-lg">
       <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-white border-white hover:bg-white/20 hover:text-white"
+        <button
+          className="h-8 px-3 rounded-md inline-flex items-center justify-center gap-2 text-sm font-medium border border-white/40 bg-transparent text-white hover:bg-white/20 transition-all"
           onClick={onExitGame}
         >
-          <Home className="mr-2 h-4 w-4" />
+          <Home className="h-4 w-4" />
           Exit
-        </Button>
+        </button>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-white border-white hover:bg-white/20 hover:text-white"
+        <button
+          className="h-8 px-3 rounded-md inline-flex items-center justify-center gap-2 text-sm font-medium border border-white/40 bg-transparent text-white hover:bg-white/20 transition-all"
           onClick={() => muteContol()}
         >
           {isMuted ? (
@@ -61,19 +56,19 @@ export function GameControls({
           ) : (
             <Volume2 className="h-4 w-4" />
           )}
-        </Button>
+        </button>
       </div>
 
       <div className="flex gap-2">
-        <Button
+        <button
           onClick={onCallUno}
           disabled={!canCallUno}
-          className={`bg-red-600 hover:bg-red-700 text-white font-extrabold hover:text-white text-xl px-6 py-2 ${
+          className={`h-10 px-6 rounded-md inline-flex items-center justify-center gap-2 font-extrabold text-xl bg-red-600 hover:bg-red-700 text-white transition-all ${
             canCallUno ? "animate-pulse shadow-lg" : "opacity-50"
           }`}
         >
           UNO!
-        </Button>
+        </button>
       </div>
     </div>
   );

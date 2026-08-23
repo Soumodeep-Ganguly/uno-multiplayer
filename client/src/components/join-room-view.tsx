@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +8,7 @@ import { toast } from "sonner";
 import socket from "@/lib/socket";
 import { GameState } from "@/types/game";
 import { PlayerList } from "./player-list";
+import { useAuth } from "@/lib/auth-context";
 
 interface JoinRoomViewProps {
   onNavigate: (view: "home" | "create-room" | "join-room" | "game") => void;
@@ -25,8 +25,16 @@ export function JoinRoomView({
   roomId,
   setRoomId,
 }: JoinRoomViewProps) {
+  const { user } = useAuth();
   const [isJoining, setIsJoining] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
+
+  // Auto-fill player name from auth context on mount
+  useEffect(() => {
+    if (user?.gameName) {
+      setPlayerName(user.gameName);
+    }
+  }, []);
 
   useEffect(() => {
     socket.on("room-state", (state: GameState) => {
@@ -111,26 +119,25 @@ export function JoinRoomView({
             )}
 
             <div className="flex justify-between pt-4">
-              <Button
-                variant="outline"
-                className="border-2 text-white hover:text-white"
+              <button
+                className="h-10 px-4 rounded-md inline-flex items-center justify-center gap-2 font-bold border-2 border-gray-300 bg-white text-gray-900 hover:bg-gray-100 transition-all"
                 onClick={() => onNavigate("home")}
               >
-                <ArrowLeft className="mr-2 h-4 w-4" />
+                <ArrowLeft className="h-4 w-4" />
                 Back
-              </Button>
+              </button>
 
-              <Button
+              <button
                 onClick={handleJoin}
                 disabled={isJoining || !playerName.trim() || !roomId}
-                className="transform hover:scale-105"
+                className="h-10 px-6 rounded-md inline-flex items-center justify-center gap-2 font-bold bg-blue-600 text-white hover:bg-blue-700 transition-all transform hover:scale-105 disabled:opacity-50 disabled:pointer-events-none"
               >
                 {isJoining
                   ? gameState
                     ? "Joined Game"
                     : "Joining..."
                   : "Join Game"}
-              </Button>
+              </button>
             </div>
           </CardContent>
         </Card>

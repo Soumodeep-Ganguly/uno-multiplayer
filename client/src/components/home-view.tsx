@@ -1,12 +1,15 @@
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UnoLogo } from "@/components/uno-logo";
+import { useAuth } from "@/lib/auth-context";
+import { User, LogIn } from "lucide-react";
 
 interface HomeViewProps {
-  onNavigate: (view: "home" | "create-room" | "join-room" | "game") => void;
+  onNavigate: (view: "home" | "create-room" | "join-room" | "game" | "profile" | "auth") => void;
 }
 
 export function HomeView({ onNavigate }: HomeViewProps) {
+  const { user, isAuthenticated, isLoading } = useAuth();
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -16,16 +19,20 @@ export function HomeView({ onNavigate }: HomeViewProps) {
             <CardTitle className="text-3xl font-extrabold text-center">
               Multiplayer UNO
             </CardTitle>
+            {!isLoading && user && (
+              <p className="text-sm text-gray-500 mt-1">
+                Playing as <span className="font-bold">{user.gameName}</span>
+                {user.isGuest && " (Guest)"}
+              </p>
+            )}
           </CardHeader>
           <CardContent className="space-y-6">
-            <Button
-              variant="default"
-              size="lg"
-              className="w-full text-lg font-bold transition-all bg-gray-700 transform hover:scale-105"
+            <button
+              className="w-full h-10 px-6 rounded-md inline-flex items-center justify-center gap-2 text-lg font-bold transition-all bg-gray-700 text-white hover:bg-gray-600 transform hover:scale-105"
               onClick={() => onNavigate("create-room")}
             >
               Create Room
-            </Button>
+            </button>
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -36,14 +43,31 @@ export function HomeView({ onNavigate }: HomeViewProps) {
               </div>
             </div>
 
-            <Button
-              variant="outline"
-              size="lg"
-              className="w-full text-lg font-bold bg-gray-700 transition-all transform hover:scale-105 text-white hover:text-white"
+            <button
+              className="w-full h-10 px-6 rounded-md inline-flex items-center justify-center gap-2 text-lg font-bold transition-all bg-gray-700 text-white hover:bg-gray-600 transform hover:scale-105"
               onClick={() => onNavigate("join-room")}
             >
               Join Room
-            </Button>
+            </button>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                className="flex-1 h-10 px-4 rounded-md inline-flex items-center justify-center gap-2 font-bold border-2 border-gray-300 bg-white text-gray-900 hover:bg-gray-100 transition-all"
+                onClick={() => onNavigate("profile")}
+              >
+                <User className="h-4 w-4" />
+                Profile
+              </button>
+              {!isAuthenticated && !isLoading && (
+                <button
+                  className="flex-1 h-10 px-4 rounded-md inline-flex items-center justify-center gap-2 font-bold border-2 border-green-500 bg-white text-green-700 hover:bg-green-50 transition-all"
+                  onClick={() => onNavigate("auth")}
+                >
+                  <LogIn className="h-4 w-4" />
+                  Login
+                </button>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

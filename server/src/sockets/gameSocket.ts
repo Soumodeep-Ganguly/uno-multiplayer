@@ -1,6 +1,7 @@
 import { Server, Socket } from "socket.io";
 import { createGame, playCard, drawCard, joinGameRoom, callUno, removePlayer, replay } from "../game/gameLogic";
 import { getGameState } from "../utils/game";
+import { GameHistoryModel, UserModel } from "../db";
 
 export const registerGameHandlers = (io: Server, socket: Socket) => {
   console.log(`Player connected: ${socket.id}`);
@@ -57,10 +58,15 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
   });
 
   socket.on("play-card", async ({ roomId, card, color }) => {
-    const gameState = await playCard(roomId, socket.id, card, color);
-    if (gameState) {
+    const gameState = await playCard(roomId, socket.id, card, color);      if (gameState) {
       io.to(roomId).emit("game-updated", gameState);
-      if (gameState.winner) io.to(roomId).emit("game-over", { winner: gameState.winner });
+      if (gameState.winner) {
+        io.to(roomId).emit("game-over", { winner: gameState.winner });
+        // Save game history
+        saveGameHistory(roomId, gameState).catch((err) =>
+          console.error("Failed to save game history:", err)
+        );
+      }
     } else {
       socket.emit("invalid-move", { message: "Invalid card played." });
     }
@@ -134,3 +140,55 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
     console.log(`Player disconnected: ${socket.id}`);
   });
 };
+
+// Save game history when a game ends
+async function saveGameHistory(
+  roomId: string,
+  gameState: any
+) {
+  try {
+    const winner = gameState.winner;
+    if (!winner) return;
+
+    // Find or create user records for all players
+    const playerRecords = await Promise.all(
+      gameState.players.map(async (p: any) => {
+        let user = await UserModel.findOne({ uuid: p.id });
+        if (!user) {
+          // Create a temporary guest record for socket-connected players
+          user = new UserModel({
+            uuid: p.id,
+            name: p.name,
+            gameName: p.name,
+            email: `${p.id}@guest.local`,
+            password: "not-used",
+            isGuest: true,
+          });
+          await user.save();
+        }
+        return {
+          userId: user._id,
+          uuid: user.uuid,
+          gameName: user.gameName || user.name,
+          cardsRemaining: p.hand?.length || 0,
+          calledUno: p.calledUno || false,
+        };
+      })
+    );
+
+    const winnerRecord = playerRecords.find(
+      (p) => p.uuid === winner.id
+    );
+
+    await GameHistoryModel.create({
+      roomId,
+      players: playerRecords,
+      winnerId: winnerRecord?.userId || playerRecords[0].userId,
+      winnerUuid: winner.id,
+      winnerGameName: winner.name || winnerRecord?.gameName || "Unknown",
+      totalRounds: gameState.roundNumber || 1,
+    });
+  } catch (error) {
+    console.error("Error saving game history:", error);
+  }
+}

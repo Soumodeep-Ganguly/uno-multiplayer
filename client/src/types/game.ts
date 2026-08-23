@@ -31,10 +31,13 @@ export interface Player {
 }
 
 export interface GameState {
+  roomId: string;
   players: Player[];
   currentCard: Card;
   currentColor: CardColor;
   currentPlayerIndex: number;
+  currentPlayer: string;
+  direction: number;
   started: boolean;
   maxPlayers: number;
   drawStack: number;
