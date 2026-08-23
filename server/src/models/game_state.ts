@@ -15,6 +15,7 @@ const CardSchema = new Schema<Card>(
 const PlayerSchema = new Schema<Player>(
   {
     id: { type: String, required: true },
+    uuid: { type: String },
     name: { type: String, required: true },
     hand: { type: [CardSchema], default: [] },
     calledUno: { type: Boolean, default: false },

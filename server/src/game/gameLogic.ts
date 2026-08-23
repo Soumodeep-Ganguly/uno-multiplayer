@@ -62,7 +62,7 @@ export const advanceTurn = (game: GameState) => {
   game.currentPlayer = game.players[game.currentPlayerIndex].id;
 };
 
-export const joinGameRoom = async (roomId: string, player: { id: string; name: string }, maxPlayers?: number) => {
+export const joinGameRoom = async (roomId: string, player: { id: string; uuid?: string; name: string }, maxPlayers?: number) => {
   let room = await getGameState(roomId)
   if (!room) {
     room = {
@@ -88,6 +88,7 @@ export const joinGameRoom = async (roomId: string, player: { id: string; name: s
 
   room.players.push({
     id: player.id,
+    uuid: player.uuid,
     name: player.name,
     hand: [],
     calledUno: false,
@@ -333,10 +334,10 @@ export const removePlayer = async (roomId: string, playerId: string) => {
 
   game.currentPlayer = game.players[game.currentPlayerIndex].id;
 
-  // If game was in progress, check if we need to end it
-  if (game.started && game.players.length < 2) {
-    game.started = false;
-    game.winner = game.players[0];
+  // If only 1 player remains, delete the room entirely
+  if (game.players.length < 2) {
+    await deleteGameRoom(roomId);
+    return;
   }
   await setGameState(roomId, game)
 };

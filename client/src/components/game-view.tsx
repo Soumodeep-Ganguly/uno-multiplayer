@@ -8,6 +8,7 @@ import socket from "@/lib/socket";
 import { Card, CardColor, GameState, Player } from "@/types/game";
 import SoundTrack from "@/assets/sound_track.mp3";
 import { AskReplay } from "./ask-replay";
+import { useAuth } from "@/lib/auth-context";
 
 interface GameViewProps {
   onNavigate: (view: "home" | "create-room" | "join-room" | "game") => void;
@@ -25,12 +26,13 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
   const [winnerSelected, setWinnerSelected] = useState(false);
   const [exitGame, setExitGame] = useState(false);
 
+  const { uuid } = useAuth();
   const joinedRef = useRef(false);
   const firstConnectRef = useRef(true);
 
   useEffect(() => {
     // Join the game room
-    socket.emit("join-room", { roomId, playerName });
+    socket.emit("join-room", { roomId, playerName, uuid });
     joinedRef.current = true;
 
     // Re-join after a disconnect/reconnect: the server removes the player on
@@ -42,7 +44,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
         return;
       }
       if (joinedRef.current) {
-        socket.emit("join-room", { roomId, playerName });
+        socket.emit("join-room", { roomId, playerName, uuid });
       }
     };
     socket.on("connect", handleConnect);
@@ -76,12 +78,19 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
     });
 
     socket.on("player-left", (playerId: string) => {
-      if (playerId === socket.id) onNavigate("home");
-      else {
-        const player = gameState?.players.find((p) => p.id === playerId);
-        if (player) {
-          toast.info(`${player.name} left the game`);
-        }
+      if (playerId === socket.id) {
+        onNavigate("home");
+        return;
+      }
+      const player = gameState?.players.find((p) => p.id === playerId);
+      if (player) {
+        toast.info(`${player.name} left the game`);
+      }
+      // If after this player leaves we're the only one left, go home
+      const remaining = gameState?.players.filter((p) => p.id !== playerId) || [];
+      if (remaining.length <= 1) {
+        toast.info("Not enough players. Returning to home...");
+        setTimeout(() => onNavigate("home"), 1500);
       }
     });
 
@@ -224,7 +233,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-500 via-purple-500 to-pink-500">
       <audio src={SoundTrack} autoPlay loop hidden muted={isMuted} />
 
-      {gameState?.players[0].id === socket.id && winnerSelected && (
+      {gameState?.players.length > 1 && gameState?.players[0].id === socket.id && winnerSelected && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <AskReplay
             confirmAction={replay}

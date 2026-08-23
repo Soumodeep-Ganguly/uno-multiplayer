@@ -5,7 +5,6 @@ import {
   loginAccount,
   registerAccount,
   getProfile,
-  getHistory,
   upgradeGuest,
 } from "./api";
 

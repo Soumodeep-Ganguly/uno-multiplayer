@@ -25,7 +25,7 @@ export function JoinRoomView({
   roomId,
   setRoomId,
 }: JoinRoomViewProps) {
-  const { user } = useAuth();
+  const { user, uuid } = useAuth();
   const [isJoining, setIsJoining] = useState(false);
   const [gameState, setGameState] = useState<GameState | null>(null);
 
@@ -65,7 +65,7 @@ export function JoinRoomView({
     }
 
     setIsJoining(true);
-    socket.emit("join-room", { roomId, playerName });
+    socket.emit("join-room", { roomId, playerName, uuid });
   };
 
   return (

@@ -40,7 +40,7 @@ export function CreateRoomView({
   players,
   setPlayers,
 }: CreateRoomViewProps) {
-  const { user } = useAuth();
+  const { user, uuid } = useAuth();
   const [roomCreated, setRoomCreated] = useState(false);
   const [canStartGame, setCanStartGame] = useState(false);
 
@@ -105,7 +105,7 @@ export function CreateRoomView({
     }
     setPlayers([playerName]);
     setRoomCreated(true);
-    socket.emit("join-room", { roomId, playerName, maxPlayers });
+    socket.emit("join-room", { roomId, playerName, maxPlayers, uuid });
   };
 
   const startGame = () => {

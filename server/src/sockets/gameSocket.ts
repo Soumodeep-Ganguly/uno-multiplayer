@@ -6,7 +6,7 @@ import { GameHistoryModel, UserModel } from "../db";
 export const registerGameHandlers = (io: Server, socket: Socket) => {
   console.log(`Player connected: ${socket.id}`);
 
-  socket.on("join-room", async ({ roomId, playerName, maxPlayers }) => {
+  socket.on("join-room", async ({ roomId, playerName, maxPlayers, uuid }) => {
     try {
       if (!roomId || !playerName) {
         socket.emit("error-joining", { message: "Room ID and player name are required" });
@@ -20,7 +20,7 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
       }
 
       socket.join(roomId);
-      const gameState = await joinGameRoom(roomId, { id: socket.id, name: playerName }, maxPlayers);
+      const gameState = await joinGameRoom(roomId, { id: socket.id, uuid, name: playerName }, maxPlayers);
 
       // Send room state to all players in the room
       io.to(roomId).emit("room-state", gameState);
@@ -150,17 +150,18 @@ async function saveGameHistory(
     const winner = gameState.winner;
     if (!winner) return;
 
-    // Find or create user records for all players
+    // Find or create user records for all players using their auth UUID
     const playerRecords = await Promise.all(
       gameState.players.map(async (p: any) => {
-        let user = await UserModel.findOne({ uuid: p.id });
+        const playerUuid = p.uuid || p.id;
+        let user = await UserModel.findOne({ uuid: playerUuid });
         if (!user) {
-          // Create a temporary guest record for socket-connected players
+          // Create a temporary guest record for players without an account
           user = new UserModel({
-            uuid: p.id,
+            uuid: playerUuid,
             name: p.name,
             gameName: p.name,
-            email: `${p.id}@guest.local`,
+            email: `${playerUuid}@guest.local`,
             password: "not-used",
             isGuest: true,
           });

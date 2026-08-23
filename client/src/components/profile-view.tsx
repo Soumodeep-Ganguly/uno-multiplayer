@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ArrowLeft, Trophy, Gamepad2, BarChart3, LogOut, UserPlus } from "lucide-react";
 import { UnoLogo } from "@/components/uno-logo";
 import { toast } from "sonner";

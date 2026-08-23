@@ -9,6 +9,7 @@ export interface Card {
 
 export interface Player {
   id: string;
+  uuid?: string;
   name: string;
   hand: Card[];
   calledUno: boolean;
