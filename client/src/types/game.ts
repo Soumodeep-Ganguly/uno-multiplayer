@@ -40,4 +40,5 @@ export interface GameState {
   drawStack: number;
   discardPile: Card[]
   winner?: Player;
+  roundNumber: number;
 }

@@ -27,4 +27,5 @@ export interface GameState {
   maxPlayers: number;
   winner?: Player;
   started: boolean;
+  roundNumber: number;
 }

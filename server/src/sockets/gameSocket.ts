@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { createGame, playCard, drawCard, joinGameRoom, callUno, removePlayer } from "../game/gameLogic";
+import { createGame, playCard, drawCard, joinGameRoom, callUno, removePlayer, replay } from "../game/gameLogic";
 import { getGameState } from "../utils/game";
 
 export const registerGameHandlers = (io: Server, socket: Socket) => {
@@ -47,6 +47,7 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
   socket.on("start-game", async ({ roomId }) => {
     try {
       const gameState = await createGame(roomId);
+      io.to(roomId).emit("room-state", gameState);
       io.to(roomId).emit("game-started", gameState);
       io.to(roomId).emit("game-updated", gameState);
     } catch (error) {
@@ -80,12 +81,52 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
     if (gameState) io.to(roomId).emit("game-updated", gameState);
   });
 
+  socket.on("play-again", async ({ roomId }) => {
+    const gameState = await replay(roomId);
+    if (gameState) {
+      io.to(roomId).emit("room-state", gameState);
+      io.to(roomId).emit("game-updated", gameState);
+      io.to(roomId).emit("game-started", gameState);
+    }
+  });
+
+  socket.on("leave-room", async ({ roomId }) => {
+    await removePlayer(roomId, socket.id);
+    socket.to(roomId).emit("player-left", socket.id);
+    const gameState = await getGameState(roomId);
+    if (gameState) {
+      io.to(roomId).emit("room-state", gameState);
+      io.to(roomId).emit("game-updated", gameState);
+      if (gameState.winner) io.to(roomId).emit("game-over", { winner: gameState.winner });
+    } else {
+      socket.leave(roomId);
+    }
+  });
+
+  socket.on("destroy-room", async ({ roomId: targetRoom }) => {
+    socket.rooms.forEach(async (roomId) => {
+      await removePlayer(roomId, socket.id);
+      socket.to(roomId).emit("player-left", socket.id);
+      const gameState = await getGameState(roomId);
+      if (gameState) {
+        io.to(roomId).emit("room-state", gameState);
+        io.to(roomId).emit("game-updated", gameState);
+        if (gameState.winner) io.to(roomId).emit("game-over", { winner: gameState.winner });
+      }
+    });
+    socket.leave(targetRoom);
+  });
+
   socket.on("disconnecting", () => {
     socket.rooms.forEach(async (roomId) => {
       await removePlayer(roomId, socket.id);
       socket.to(roomId).emit("player-left", socket.id);
       const gameState = await getGameState(roomId);
-      if (gameState) io.to(roomId).emit("game-updated", gameState);
+      if (gameState) {
+        io.to(roomId).emit("room-state", gameState);
+        io.to(roomId).emit("game-updated", gameState);
+        if (gameState.winner) io.to(roomId).emit("game-over", { winner: gameState.winner });
+      }
     });
   });
 

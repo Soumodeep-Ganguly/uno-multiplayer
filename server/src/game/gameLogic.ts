@@ -76,7 +76,8 @@ export const joinGameRoom = async (roomId: string, player: { id: string; name: s
       discardPile: [],
       currentColor: "red",
       drawStack: 0,
-      started: false
+      started: false,
+      roundNumber: 1
     }
     await setGameState(roomId, room)
   }
@@ -105,7 +106,7 @@ export const createGame = async (roomId: string) => {
 
   const deck = createDeck();
 
-  const tempGame: GameState = { ...game, deck: deck, discardPile: [], players: [], started: false, currentColor: "red", drawStack: 0, direction: 1, currentPlayerIndex: 0, maxPlayers: game.maxPlayers, roomId: roomId };
+  const tempGame: GameState = { ...game, deck: deck, discardPile: [], players: [], started: false, currentColor: "red", drawStack: 0, direction: 1, currentPlayerIndex: 0, maxPlayers: game.maxPlayers, roomId: roomId, roundNumber: game.roundNumber ?? 1 };
 
   const players = game.players.map((player) => ({
     ...player,
@@ -120,16 +121,21 @@ export const createGame = async (roomId: string) => {
   }
   const discardPile = [firstCard];
 
+  // Compute starting player based on round number
+  const startingPlayerIndex = ((tempGame.roundNumber - 1) % players.length + players.length) % players.length;
+
   const newGame = {
     ...game,
     players,
-    currentPlayerIndex: 0,
+    currentPlayerIndex: startingPlayerIndex,
+    currentPlayer: players[startingPlayerIndex].id,
     direction: 1,
     deck: tempGame.deck,
     discardPile,
     currentColor: discardPile[0].color,
     drawStack: 0,
-    started: true
+    started: true,
+    roundNumber: tempGame.roundNumber
   };
 
   setGameState(roomId, newGame)
@@ -253,6 +259,56 @@ export const callUno = async (roomId: string, playerId: string) => {
   player.calledUno = true;
   setGameState(roomId, game)
   return game;
+};
+
+export const replay = async (roomId: string) => {
+  const game = await getGameState(roomId);
+  if (!game) return null;
+
+  // Create a fresh deck
+  const deck = createDeck();
+  const tempGame: GameState = {
+    ...game,
+    deck,
+    discardPile: [],
+    direction: 1,
+    drawStack: 0,
+    currentPlayerIndex: 0,
+    winner: undefined,
+    started: false,
+    roundNumber: (game.roundNumber ?? 1) + 1,
+  };
+
+  // Deal cards to all players
+  const players = game.players.map((player) => ({
+    ...player,
+    hand: drawCards(tempGame, 7),
+    calledUno: false,
+  }));
+
+  // Get the first valid card to start
+  let firstCard = tempGame.deck.pop()!;
+  while (firstCard.color === "wild") {
+    tempGame.deck.unshift(firstCard);
+    firstCard = tempGame.deck.pop()!;
+  }
+
+  // Compute starting player based on new round number
+  const startingPlayerIndex = ((tempGame.roundNumber - 1) % players.length + players.length) % players.length;
+
+  // Update game state
+  const newGame: GameState = {
+    ...tempGame,
+    players,
+    discardPile: [firstCard],
+    currentColor: firstCard.color,
+    started: true,
+    currentPlayerIndex: startingPlayerIndex,
+    currentPlayer: players[startingPlayerIndex].id,
+  };
+
+  await setGameState(roomId, newGame);
+  return newGame;
 };
 
 export const removePlayer = async (roomId: string, playerId: string) => {
