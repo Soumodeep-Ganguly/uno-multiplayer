@@ -3,6 +3,16 @@ import { createGame, playCard, drawCard, joinGameRoom, callUno, removePlayer, re
 import { getGameState } from "../utils/game";
 import { GameHistoryModel, UserModel } from "../db";
 
+const lastActionAt = new Map<string, number>();
+function isRateLimited(socketId: string, roomId: string, ms = 350) {
+  const key = `${socketId}:${roomId}`;
+  const now = Date.now();
+  const last = lastActionAt.get(key) || 0;
+  if (now - last < ms) return true;
+  lastActionAt.set(key, now);
+  return false;
+}
+
 export const registerGameHandlers = (io: Server, socket: Socket) => {
   console.log(`Player connected: ${socket.id}`);
 
@@ -58,6 +68,10 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
   });
 
   socket.on("play-card", async ({ roomId, card, color }) => {
+    if (isRateLimited(socket.id, roomId, 250)) {
+      socket.emit("invalid-move", { message: "Too fast. Slow down." });
+      return;
+    }
     const gameState = await playCard(roomId, socket.id, card, color);      if (gameState) {
       io.to(roomId).emit("game-updated", gameState);
       if (gameState.winner) {
@@ -73,13 +87,29 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
   });
 
   socket.on("draw-card", async ({ roomId }) => {
+    if (isRateLimited(socket.id, roomId, 350)) {
+      socket.emit("invalid-move", { message: "Draw on cooldown." });
+      return;
+    }
     const gameState = await drawCard(roomId, socket.id);
     if (gameState) io.to(roomId).emit("game-updated", gameState);
+    else {
+      const cur = await getGameState(roomId);
+      if (cur) socket.emit("invalid-move", { message: "Cannot draw now." });
+    }
   });
 
   socket.on("penalty-draw", async ({ roomId }) => {
+    if (isRateLimited(socket.id, roomId, 350)) {
+      socket.emit("invalid-move", { message: "Draw on cooldown." });
+      return;
+    }
     const gameState = await drawCard(roomId, socket.id);
     if (gameState) io.to(roomId).emit("game-updated", gameState);
+    else {
+      const cur = await getGameState(roomId);
+      if (cur) socket.emit("invalid-move", { message: "Cannot draw now." });
+    }
   });
 
   socket.on("call-uno", async ({ roomId }) => {
@@ -110,7 +140,8 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
   });
 
   socket.on("destroy-room", async ({ roomId: targetRoom }) => {
-    socket.rooms.forEach(async (roomId) => {
+    for (const roomId of socket.rooms) {
+      if (roomId === socket.id) continue;
       await removePlayer(roomId, socket.id);
       socket.to(roomId).emit("player-left", socket.id);
       const gameState = await getGameState(roomId);
@@ -119,12 +150,13 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
         io.to(roomId).emit("game-updated", gameState);
         if (gameState.winner) io.to(roomId).emit("game-over", { winner: gameState.winner });
       }
-    });
+    }
     socket.leave(targetRoom);
   });
 
-  socket.on("disconnecting", () => {
-    socket.rooms.forEach(async (roomId) => {
+  socket.on("disconnecting", async () => {
+    for (const roomId of socket.rooms) {
+      if (roomId === socket.id) continue;
       await removePlayer(roomId, socket.id);
       socket.to(roomId).emit("player-left", socket.id);
       const gameState = await getGameState(roomId);
@@ -133,11 +165,12 @@ export const registerGameHandlers = (io: Server, socket: Socket) => {
         io.to(roomId).emit("game-updated", gameState);
         if (gameState.winner) io.to(roomId).emit("game-over", { winner: gameState.winner });
       }
-    });
+    }
   });
 
   socket.on("disconnect", () => {
     console.log(`Player disconnected: ${socket.id}`);
+    for (const k of lastActionAt.keys()) if (k.startsWith(socket.id + ":")) lastActionAt.delete(k);
   });
 };
 

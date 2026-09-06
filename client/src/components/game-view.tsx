@@ -29,6 +29,8 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
   const { uuid } = useAuth();
   const joinedRef = useRef(false);
   const firstConnectRef = useRef(true);
+  const [isActionPending, setIsActionPending] = useState(false);
+  const hasDrawnThisTurnRef = useRef(false);
 
   useEffect(() => {
     // Join the game room
@@ -56,6 +58,11 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
 
     socket.on("game-updated", (state: GameState) => {
       setGameState(state);
+      setIsActionPending(false);
+      // reset local draw guard when turn changes away from us
+      const currentId = state.players[state.currentPlayerIndex]?.id;
+      if (currentId !== socket.id) hasDrawnThisTurnRef.current = false;
+      // also reset if we have no longer drawn state (server advanced or we played)
       const me = state.players.find((p) => p.id === socket.id);
       if (me) setHasCalledUno(me.calledUno);
 
@@ -96,6 +103,7 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
 
     socket.on("invalid-move", ({ message }: { message: string }) => {
       toast.error(message);
+      setIsActionPending(false);
     });
 
     socket.on("game-over", ({ winner }: { winner: Player }) => {
@@ -119,7 +127,9 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
   useEffect(() => {
     if (gameState) {
       const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-      setIsCurrentPlayer(currentPlayer?.id === socket.id);
+      const isCurrent = currentPlayer?.id === socket.id;
+      setIsCurrentPlayer(isCurrent);
+      if (!isCurrent) hasDrawnThisTurnRef.current = false;
     }
   }, [gameState]);
 
@@ -145,12 +155,23 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
   };
 
   const drawCard = () => {
-    if (!isCurrentPlayer) return;
+    if (!isCurrentPlayer || isActionPending) return;
+    if (hasDrawnThisTurnRef.current && gameState?.drawStack === 0) {
+      toast.error("Already drew this turn - play a card");
+      return;
+    }
+    setIsActionPending(true);
+    // optimistic local guard: if drawStack==0 we already drew, block further clicks until turn changes
+    if (gameState?.drawStack === 0) hasDrawnThisTurnRef.current = true;
     socket.emit("draw-card", { roomId });
+    // failsafe: re-enable after 2s if no game-updated (lag)
+    setTimeout(() => setIsActionPending(false), 2000);
   };
 
   const handleColorSelection = (color: CardColor) => {
     if (pendingWildCard) {
+      setIsActionPending(true);
+      hasDrawnThisTurnRef.current = false;
       socket.emit("play-card", {
         roomId,
         card: pendingWildCard,
@@ -158,11 +179,12 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
       });
       setPendingWildCard(null);
       setShowColorSelector(false);
+      setTimeout(() => setIsActionPending(false), 2000);
     }
   };
 
   const playCard = (card: Card) => {
-    if (!isCurrentPlayer || !gameState) return;
+    if (!isCurrentPlayer || !gameState || isActionPending) return;
 
     console.log("Trying to play card:", card, "Current player:", socket.id);
 
@@ -171,11 +193,14 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
         setPendingWildCard(card);
         setShowColorSelector(true);
       } else {
+        setIsActionPending(true);
+        hasDrawnThisTurnRef.current = false;
         socket.emit("play-card", {
           roomId,
           card,
           color: card.color,
         });
+        setTimeout(() => setIsActionPending(false), 2000);
 
         const playerHand =
           gameState.players.find((p) => p.id === socket.id)?.hand || [];
@@ -301,12 +326,14 @@ export function GameView({ onNavigate, roomId, playerName }: GameViewProps) {
         <div className="flex items-center justify-center gap-8 mb-4">
           {/* Draw pile */}
           <div
-            className="h-32 w-20 bg-gray-700 rounded-xl border-2 border-white shadow-lg cursor-pointer hover:scale-105 transition-transform"
-            onClick={isCurrentPlayer ? drawCard : undefined}
+            className={`h-32 w-20 rounded-xl border-2 border-white shadow-lg flex items-center justify-center text-white font-bold transition-transform ${
+              isCurrentPlayer && !isActionPending && !(hasDrawnThisTurnRef.current && gameState?.drawStack === 0)
+                ? "bg-gray-700 cursor-pointer hover:scale-105"
+                : "bg-gray-500 cursor-not-allowed opacity-60"
+            }`}
+            onClick={isCurrentPlayer && !isActionPending && !(hasDrawnThisTurnRef.current && gameState?.drawStack === 0) ? drawCard : undefined}
           >
-            <div className="h-full w-full flex items-center justify-center text-white font-bold">
-              DRAW
-            </div>
+            {isActionPending ? "..." : "DRAW"}
           </div>
 
           {/* Current card */}

@@ -56,10 +56,14 @@ export const drawCards = (game: GameState, count = 1): Card[] => {
   return cards;
 };
 
+const actionLocks = new Set<string>();
+const hasDrawnThisTurn = new Set<string>();
+
 export const advanceTurn = (game: GameState) => {
   if (game.players.length === 0) return;
   game.currentPlayerIndex = (game.currentPlayerIndex + game.direction + game.players.length) % game.players.length;
   game.currentPlayer = game.players[game.currentPlayerIndex].id;
+  hasDrawnThisTurn.delete(game.roomId);
 };
 
 export const joinGameRoom = async (roomId: string, player: { id: string; uuid?: string; name: string }, maxPlayers?: number) => {
@@ -104,6 +108,8 @@ export const createGame = async (roomId: string) => {
   if (!game) throw new Error("Room not found");
   if (game.players.length < 2) throw new Error("Need at least 2 players to start");
   if (game.deck.length > 0) return game
+  hasDrawnThisTurn.delete(roomId);
+  actionLocks.delete(roomId);
 
   const deck = createDeck();
 
@@ -148,6 +154,7 @@ export const playCard = async (roomId: string, playerId: string, card: Card, col
   const game = await getGameState(roomId);
   if (!game) return null;
   if (!game.started) return null;
+  if (actionLocks.has(roomId)) return null;
 
   const player = game.players.find((p) => p.id === playerId);
   if (!player) return null;
@@ -163,17 +170,17 @@ export const playCard = async (roomId: string, playerId: string, card: Card, col
   const topCard = game.discardPile[game.discardPile.length - 1];
   const isPlayable = !!topCard && (card.color === "wild" || card.color === game.currentColor || card.value === topCard.value);
 
-  // Add logic for +2 and +4 cards
-  if (card.type === "+2" || card.type === "+4") {
-    if (topCard.type !== card.type && topCard.type !== "+2" && topCard.type !== "+4" && game.drawStack > 1) {
-      // If the top card is not a +2 or +4, the player must draw according to drawStack
-      return drawCard(roomId, playerId);
-    }
+  if (game.drawStack > 0) {
+    const isStackable = (topCard.type === "+2" && card.type === "+2") || (topCard.type === "+4" && card.type === "+4");
+    if (!isStackable) return null;
   }
   
   if (!isPlayable) return null;
 
-  if (game.drawStack > 1 && card.type !== "+2" && card.type !== "+4") return null;
+  if (game.drawStack > 0 && card.type !== "+2" && card.type !== "+4") return null;
+
+  actionLocks.add(roomId);
+  try {
 
   const playedCard = player.hand.splice(handCardIndex, 1)[0];
   game.discardPile.push(playedCard);
@@ -211,42 +218,56 @@ export const playCard = async (roomId: string, playerId: string, card: Card, col
   setGameState(roomId, game)
 
   return game;
+  } finally {
+    actionLocks.delete(roomId);
+  }
 };
 
 export const drawCard = async (roomId: string, playerId: string) => {
   const game = await getGameState(roomId);
   if (!game) return null;
   if (!game.started) return null;
+  if (actionLocks.has(roomId)) return null;
 
   const player = game.players.find((p) => p.id === playerId);
   if (!player) return null;
   if (game.players[game.currentPlayerIndex].id !== playerId) return null;
+  if (game.drawStack === 0 && hasDrawnThisTurn.has(roomId)) return null;
 
-  let cardDraw = 1
-  if(game.drawStack > 0) cardDraw = game.drawStack
+  actionLocks.add(roomId);
+  try {
+    let cardDraw = 1
+    if(game.drawStack > 0) cardDraw = game.drawStack
 
-  const drawnCards = drawCards(game, cardDraw);
-  player.hand.push(...drawnCards);
+    const drawnCards = drawCards(game, cardDraw);
+    player.hand.push(...drawnCards);
 
-  // After drawing, check if they can play any card
-  const topCard = game.discardPile[game.discardPile.length - 1];
-  const hasPlayableCard = player.hand.some(c =>
-    c.color === "wild" ||
-    c.color === game.currentColor ||
-    c.value === topCard.value
-  );
+    // After drawing, check if they can play any card
+    const topCard = game.discardPile[game.discardPile.length - 1];
+    const hasPlayableCard = player.hand.some(c =>
+      c.color === "wild" ||
+      c.color === game.currentColor ||
+      c.value === topCard.value
+    );
 
-  if (game.drawStack > 0) {
-    // If drawing because of drawStack (+2/+4), we always advance turn
-    advanceTurn(game);
-    game.drawStack = 0;
-  } else if (!hasPlayableCard) {
-    // If no playable card even after drawing, advance turn
-    advanceTurn(game);
+    if (game.drawStack > 0) {
+      // If drawing because of drawStack (+2/+4), we always advance turn
+      hasDrawnThisTurn.delete(roomId);
+      advanceTurn(game);
+      game.drawStack = 0;
+    } else if (!hasPlayableCard) {
+      // If no playable card even after drawing, advance turn
+      hasDrawnThisTurn.delete(roomId);
+      advanceTurn(game);
+    } else {
+      hasDrawnThisTurn.add(roomId);
+    }
+
+    setGameState(roomId, game)
+    return game;
+  } finally {
+    actionLocks.delete(roomId);
   }
-
-  setGameState(roomId, game)
-  return game;
 };
 
 export const callUno = async (roomId: string, playerId: string) => {
@@ -308,6 +329,8 @@ export const replay = async (roomId: string) => {
     currentPlayer: players[startingPlayerIndex].id,
   };
 
+  hasDrawnThisTurn.delete(roomId);
+  actionLocks.delete(roomId);
   await setGameState(roomId, newGame);
   return newGame;
 };
